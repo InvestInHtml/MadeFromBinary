@@ -1,6 +1,6 @@
 # Algorithm goes here please
 import pandas
-def initialzie(context): #alleviates need to call functions
+def initialize(context): #alleviates need to call functions
     context.aapl=sid(24) #aapl=company ticker. sid=stock ID. tickers can change over time from being bought/sold, copmanies closing down etc. sid used to ensure investment in desired company
 def handle_data(context, data): #function takes data; universe of information. contains everything, eg stock prices
     hist=data.history(context, 'price', 50, '1d') #50 periods of 1 day data history prices for Apple
