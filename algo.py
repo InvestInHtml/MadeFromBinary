@@ -41,8 +41,10 @@ def before_trading_start(context, data):
     # Get pipeline outputs and
     # store them in context
     context.output = pipeline_output('data_pipe')
+    
     #print(context.output.sort_values('longs', ascending=False).head(5))
     #print(context.output.sort_values('shorts', ascending=False).head(5))
+    
     # Create a list of the stocks that we want to go long in
     context.longs = [] # To store the stocks that we want to go long in
     for sec in context.output[context.output['longs']].index.tolist(): # For each security
@@ -59,30 +61,44 @@ def before_trading_start(context, data):
 def make_pipeline():
 
     my_sectors = [  # A list of the sectors that we want to trade based on their sector id
-       206, #"Healthcare"  
-       309, #"Energy"
-       311, #"Technology"  
+       206#, #"Healthcare"  
+       #309, #"Energy"
+       #311, #"Technology"  
     ] 
 
     sector_filter = Sector().element_of(my_sectors) # Create a sector filter
-
-    #sentiment_score = SimpleMovingAverage(
-      #  inputs=[stocktwits.bull_minus_bear], # How the tweets are
-    #    window_length=3,
-     #   mask=QTradableStocksUS() # Us stocks
-    #)
     
-    base_universe = QTradableStocksUS() # The stock universe that we want to use
+    base_universe = QTradableStocksUS() & sector_filter # The stock universe that we want to use
     
+    sentiment_score_20 = SimpleMovingAverage(
+        inputs=[stocktwits.bull_minus_bear], # How the tweets are
+        window_length=20,
+        mask=base_universe # Us stocks
+    )
     
-    sma_20 = SimpleMovingAverage(inputs=[USEquityPricing.close], window_length=20, mask=base_universe) # 20 day moving average
+    sentiment_score_50 = SimpleMovingAverage(
+        inputs=[stocktwits.bull_minus_bear], # How the tweets are
+        window_length=50,
+        mask=base_universe # Us stocks
+    )
+   
+    sma_20 = SimpleMovingAverage(inputs=[USEquityPricing.close], window_length=30, mask=base_universe) # 20 day moving average
     
     sma_50 = SimpleMovingAverage(inputs=[USEquityPricing.close], window_length=50, mask=base_universe) # 50 day moving average
      
-    longs = sma_20 > sma_50 # The stocks that are doing better than normal
-    shorts = sma_20 < sma_50 # THe stocks that are doing worse than normal
+    above_average = sma_20 > sma_50 # The stocks that are doing better than normal
+    below_average = sma_20 < sma_50 # The stocks that are doing worse than normal
     
-    securities_to_trade = (longs | shorts) & sector_filter # All of the stocks that are either in long or short and are in energy, technology or health
+    #middle_75_bull = ~(sentiment_score.top(100) & sentiment_score.top(25))
+    #middle_75_bear = ~(sentiment_score.bottom(100) & sentiment_score.bottom(25))
+    
+    longs = above_average & (sentiment_score_20 > sentiment_score_50) # Go long on the above average stocks that everyone else also thinks are going to increase
+    
+
+    
+    shorts = below_average & (sentiment_score_50 > sentiment_score_20) # Go short on the below average stocks that everyone else also thinks are going to decrease
+    
+    securities_to_trade = (longs | shorts) # All of the stocks that are either in long or short and are in energy, technology or health
     
     return Pipeline( # Declare a new pipeline
        columns={ # The columns of data
@@ -103,8 +119,8 @@ def compute_target_weights(context, data):
     if context.longs and context.shorts: # If there are securities in our longs and shorts lists
         # 0.5 in each means that we want half of our portfolio to be longs and the other half
         # to be shorts
-        context.longs = context.longs[-75:]
-        context.shorts = context.shorts[-75:]
+        context.longs = context.longs[0:74]
+        context.shorts = context.shorts[0:74]
         long_weight = 0.5 / len(context.longs) # Divde 0.5 by the number of longs so each long is equally weighted (it's the same percentage of the porfolio)
         short_weight = -0.5 / len(context.shorts) # Same for the shorts
     else:
