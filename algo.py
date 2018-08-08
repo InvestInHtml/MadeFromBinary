@@ -1,5 +1,3 @@
-# Algorithm goes here please
-import pandas
 # Import Algorithm API functions
 from quantopian.algorithm import (
     attach_pipeline,
@@ -17,6 +15,7 @@ from quantopian.pipeline.factors import SimpleMovingAverage
 from quantopian.pipeline.data.builtin import USEquityPricing
 # Import built-in universe and Risk API method
 from quantopian.pipeline.filters import QTradableStocksUS
+from quantopian.pipeline.classifiers.morningstar import Sector
 
 
 def initialize(context):
@@ -59,15 +58,22 @@ def before_trading_start(context, data):
 # Pipeline definition
 def make_pipeline():
 
+    my_sectors = [  # A list of the sectors that we want to trade based on their sector id
+       206, #"Healthcare"  
+       309, #"Energy"
+       311, #"Technology"  
+    ] 
+
+    sector_filter = Sector().element_of(my_sectors) # Create a sector filter
+
     #sentiment_score = SimpleMovingAverage(
       #  inputs=[stocktwits.bull_minus_bear], # How the tweets are
     #    window_length=3,
      #   mask=QTradableStocksUS() # Us stocks
     #)
     
-    base_universe = QTradableStocksUS()
+    base_universe = QTradableStocksUS() # The stock universe that we want to use
     
-    energy_technology_health = symbols('XLK', 'XLE', 'XLV') # The stocks in technology, energy, and health NOT RESPECTED YET
     
     sma_20 = SimpleMovingAverage(inputs=[USEquityPricing.close], window_length=20, mask=base_universe) # 20 day moving average
     
@@ -76,7 +82,7 @@ def make_pipeline():
     longs = sma_20 > sma_50 # The stocks that are doing better than normal
     shorts = sma_20 < sma_50 # THe stocks that are doing worse than normal
     
-    securities_to_trade = (longs | shorts) # All of the stocks that are either in long or short and are in energy_technology and health
+    securities_to_trade = (longs | shorts) & sector_filter # All of the stocks that are either in long or short and are in energy, technology or health
     
     return Pipeline( # Declare a new pipeline
        columns={ # The columns of data
@@ -135,8 +141,3 @@ def rebalance(context, data):
             objective=opt.TargetWeights(target_weights),
             constraints=[dollar_neutral, max_leverage],
         )
-        
-    
-    
-    
-    
