@@ -41,19 +41,23 @@ def before_trading_start(context, data):
     # Get pipeline outputs and
     # store them in context
     context.output = pipeline_output('data_pipe')
+    
     #print(context.output.sort_values('longs', ascending=False).head(5))
     #print(context.output.sort_values('shorts', ascending=False).head(5))
+    
     # Create a list of the stocks that we want to go long in
     context.longs = [] # To store the stocks that we want to go long in
-    for sec in context.output[context.output['longs']].index.tolist(): # For each security
-        if data.can_trade(sec): # If we can trade
-            context.longs.append(sec) # Add it to the list
+    if 'longs' in context.output.keys():
+        for sec in context.output[context.output['longs']].index.tolist(): # For each security
+            if data.can_trade(sec): # If we can trade
+                context.longs.append(sec) # Add it to the list
             
     # Create a list of the stocks that we want to go short in
     context.shorts = [] # To store the stocks that we want to go short in
-    for sec in context.output[context.output['shorts']].index.tolist(): # For each security
-        if data.can_trade(sec): # If we can trade
-            context.shorts.append(sec) # Add it to the list
+    if 'shorts' in context.output.keys():
+        for sec in context.output[context.output['shorts']].index.tolist(): # For each security
+            if data.can_trade(sec): # If we can trade
+                context.shorts.append(sec) # Add it to the list
 
 # Pipeline definition
 def make_pipeline():
@@ -65,32 +69,101 @@ def make_pipeline():
     ] 
 
     sector_filter = Sector().element_of(my_sectors) # Create a sector filter
-
-    #sentiment_score = SimpleMovingAverage(
-      #  inputs=[stocktwits.bull_minus_bear], # How the tweets are
-    #    window_length=3,
-     #   mask=QTradableStocksUS() # Us stocks
-    #)
     
-    base_universe = QTradableStocksUS() # The stock universe that we want to use
+    base_universe = QTradableStocksUS() & sector_filter # The stock universe that we want to use
+    
+    just_health = base_universe & Sector().element_of([206])
+    just_energy = base_universe & Sector().element_of([309])
+    just_technology = base_universe & Sector().element_of([311])
+    
+    just_health_sma_75 = SimpleMovingAverage(inputs=[USEquityPricing.close], window_length=75, mask=just_health) # 75 day moving average
+    just_energy_sma_75 = SimpleMovingAverage(inputs=[USEquityPricing.close], window_length=75, mask=just_health) # 75 day moving average
+    just_technology_sma_75 = SimpleMovingAverage(inputs=[USEquityPricing.close], window_length=75, mask=just_health) # 75 day moving average
+    
+    just_health_sma_30 = SimpleMovingAverage(inputs=[USEquityPricing.close], window_length=30, mask=just_health) # 75 day moving average
+    just_energy_sma_30 = SimpleMovingAverage(inputs=[USEquityPricing.close], window_length=30, mask=just_health) # 75 day moving average
+    just_technology_sma_30 = SimpleMovingAverage(inputs=[USEquityPricing.close], window_length=30, mask=just_health) # 75 day moving average
     
     
-    sma_20 = SimpleMovingAverage(inputs=[USEquityPricing.close], window_length=20, mask=base_universe) # 20 day moving average
-    
-    sma_50 = SimpleMovingAverage(inputs=[USEquityPricing.close], window_length=50, mask=base_universe) # 50 day moving average
-     
-    longs = sma_20 > sma_50 # The stocks that are doing better than normal
-    shorts = sma_20 < sma_50 # THe stocks that are doing worse than normal
-    
-    securities_to_trade = (longs | shorts) & sector_filter # All of the stocks that are either in long or short and are in energy, technology or health
-    
-    return Pipeline( # Declare a new pipeline
-       columns={ # The columns of data
-           'longs': longs, # One for longs
-           'shorts': shorts # One for shorts
-       },
-       screen=(securities_to_trade), # Filter to show only the ones that that in either of the columns i.e. no irrelevant data.
+    sentiment_score_technology = SimpleMovingAverage(
+        inputs=[stocktwits.bull_minus_bear], # How the tweets are
+        window_length=20,
+        mask=just_technology # Us stocks
     )
+    
+    sentiment_score_health = SimpleMovingAverage(
+        inputs=[stocktwits.bull_minus_bear], # How the tweets are
+        window_length=20,
+        mask=just_health # Us stocks
+    )
+    
+    sentiment_score_energy = SimpleMovingAverage(
+        inputs=[stocktwits.bull_minus_bear], # How the tweets are
+        window_length=20,
+        mask=just_energy # Us stocks
+    )
+    
+
+    
+   
+    #sma_20 = SimpleMovingAverage(inputs=[USEquityPricing.close], window_length=30, mask=base_universe) # 20 day moving average
+    
+    #sma_50 = SimpleMovingAverage(inputs=[USEquityPricing.close], window_length=50, mask=base_universe) # 50 day moving average
+     
+    #above_average = sma_20 > sma_50 # The stocks that are doing better than normal
+    #below_average = sma_20 < sma_50 # The stocks that are doing worse than normal
+    
+    #middle_75_bull = ~(sentiment_score.top(100) & sentiment_score.top(25))
+    #middle_75_bear = ~(sentiment_score.bottom(100) & sentiment_score.bottom(25))
+    
+    longs = shorts = None
+    
+    if just_technology_sma_30 > just_technology_sma_75:
+        if just_energy_sma_30 > just_energy_sma_75:
+            if just_health_sma_30 > just_health_sma_75:
+                just_technology_long = sentiment_score_technology.top(40)
+                just_energy_long = sentiment_score_energy.top(40)
+                just_health_long = sentiment_score_health.top(20)
+        else:
+            just_technology_long = sentiment_score_technology.top(30)
+            just_energy_long = sentiment_score_energy.top(20)
+            just_health_long = sentiment_score_health.top(50)
+           
+        longs = just_technology_long | just_energy_long | just_health_long 
+    else:
+        just_technology_short = sentiment_score_technology.bottom(50)
+        just_energy_short = sentiment_score_energy.bottom(30)
+        just_health_short = sentiment_score_health.bottom(20)
+        
+        shorts = just_technology_short | just_energy_short | just_health_short
+    
+    
+    #longs = above_average & (sentiment_score_20 > sentiment_score_50) # Go long on the above average stocks that everyone else also thinks are going to increase
+    
+
+    
+    #shorts = below_average & (sentiment_score_50 > sentiment_score_20) # Go short on the below average stocks that everyone else also thinks are going to decrease
+    
+    pipeline = Pipeline()
+    try:
+        pipeline.add(longs, 'longs')
+    except:
+        pass
+    
+    try:
+        pipeline.add(shorts, 'shorts')
+    except:
+        pass
+    #securities_to_trade = (longs | shorts) # All of the stocks that are either in long or short and are in energy, technology or health
+    
+    return pipeline
+    #return Pipeline( # Declare a new pipeline
+    #   columns={ # The columns of data
+    #       'longs': longs, # One for longs
+    #       'shorts': shorts # One for shorts
+    #   },
+    #   screen=(securities_to_trade), # Filter to show only the ones that that in either of the columns i.e. no irrelevant data.
+    #)
 
 def compute_target_weights(context, data):
     # Weights are a number that we use to rank each stock. Stocks with high weights are ones
@@ -103,8 +176,8 @@ def compute_target_weights(context, data):
     if context.longs and context.shorts: # If there are securities in our longs and shorts lists
         # 0.5 in each means that we want half of our portfolio to be longs and the other half
         # to be shorts
-        context.longs = context.longs[-75:]
-        context.shorts = context.shorts[-75:]
+        context.longs = context.longs[0:74]
+        context.shorts = context.shorts[0:74]
         long_weight = 0.5 / len(context.longs) # Divde 0.5 by the number of longs so each long is equally weighted (it's the same percentage of the porfolio)
         short_weight = -0.5 / len(context.shorts) # Same for the shorts
     else:
