@@ -1,143 +1,71 @@
-# Import Algorithm API functions
-from quantopian.algorithm import (
-    attach_pipeline,
-    pipeline_output,
-    order_optimal_portfolio,
-)
-
-# Import Optimize API module
-import quantopian.optimize as opt
-
-# Pipeline imports
-from quantopian.pipeline import Pipeline
-from quantopian.pipeline.data.psychsignal import stocktwits
-from quantopian.pipeline.factors import SimpleMovingAverage
-from quantopian.pipeline.data.builtin import USEquityPricing
-# Import built-in universe and Risk API method
-from quantopian.pipeline.filters import QTradableStocksUS
-from quantopian.pipeline.classifiers.morningstar import Sector
-
-
-def initialize(context):
-    # Constraint parameters
-    context.max_leverage = 1.0 # Don't spend more than what we have
-    context.max_pos_size = 0.015
-    context.max_turnover = 0.95
+def initialize(context): #alleviates need to call functions
+    set_benchmark(symbol('XLK'))
+    context.stocks=symbol('XLK') #XLK=company ticker. sid=stock ID. tickers can change over time from being bought/sold, copmanies closing down etc. sid used to ensure investment in desired company TECH
+    context.stocks2=symbol('XLE')
+    #context.stocks2=symbol('XLE') #ENERGY
+    context.stocks3=symbol('XLV') #HEALTH
     
-    # Attach data pipelines
-    attach_pipeline(
-        make_pipeline(),
-        'data_pipe'
-    )
-    # Schedule rebalance function
-    schedule_function(
-        rebalance,
-        date_rules.week_start(),
-        time_rules.market_open(),
-    )
-
-
-def before_trading_start(context, data):
-    # Get pipeline outputs and
-    # store them in context
-    context.output = pipeline_output('data_pipe')
-    #print(context.output.sort_values('longs', ascending=False).head(5))
-    #print(context.output.sort_values('shorts', ascending=False).head(5))
-    # Create a list of the stocks that we want to go long in
-    context.longs = [] # To store the stocks that we want to go long in
-    for sec in context.output[context.output['longs']].index.tolist(): # For each security
-        if data.can_trade(sec): # If we can trade
-            context.longs.append(sec) # Add it to the list
-            
-    # Create a list of the stocks that we want to go short in
-    context.shorts = [] # To store the stocks that we want to go short in
-    for sec in context.output[context.output['shorts']].index.tolist(): # For each security
-        if data.can_trade(sec): # If we can trade
-            context.shorts.append(sec) # Add it to the list
-
-# Pipeline definition
-def make_pipeline():
-
-    my_sectors = [  # A list of the sectors that we want to trade based on their sector id
-       206, #"Healthcare"  
-       309, #"Energy"
-       311, #"Technology"  
-    ] 
-
-    sector_filter = Sector().element_of(my_sectors) # Create a sector filter
-
-    #sentiment_score = SimpleMovingAverage(
-      #  inputs=[stocktwits.bull_minus_bear], # How the tweets are
-    #    window_length=3,
-     #   mask=QTradableStocksUS() # Us stocks
-    #)
+    context.bought = False # Store that we've not bought anything yet
+    context.bought_price = 0.0 # We've not bought anything yet
+    context.sold_price = 999999.9
     
-    base_universe = QTradableStocksUS() # The stock universe that we want to use
-    
-    
-    sma_20 = SimpleMovingAverage(inputs=[USEquityPricing.close], window_length=20, mask=base_universe) # 20 day moving average
-    
-    sma_50 = SimpleMovingAverage(inputs=[USEquityPricing.close], window_length=50, mask=base_universe) # 50 day moving average
-     
-    longs = sma_20 > sma_50 # The stocks that are doing better than normal
-    shorts = sma_20 < sma_50 # THe stocks that are doing worse than normal
-    
-    securities_to_trade = (longs | shorts) & sector_filter # All of the stocks that are either in long or short and are in energy, technology or health
-    
-    return Pipeline( # Declare a new pipeline
-       columns={ # The columns of data
-           'longs': longs, # One for longs
-           'shorts': shorts # One for shorts
-       },
-       screen=(securities_to_trade), # Filter to show only the ones that that in either of the columns i.e. no irrelevant data.
-    )
+def handle_data(context, data): #function takes data; universe of information. contains everything, eg stock prices
+    hist1=data.history(context.stocks, 'price', 75, '1d') #50 periods of 1 day data history prices for Apple
+    #hist2=data.history(context.stocks2, 'price', 30, '1d')
+    #hist3=data.history(context.stocks3, 'price', 50, '1d')
+    '''
+    log.info(hist1.head())#uses pandas data
+    hist1_sma_75=hist1.mean() #sma is simple moving average, hist takes it from the above defined data set
+    log.info(hist1.head())
+    hist1_sma_30=hist1[-30:].mean() #mean of the last 20 days of the history
 
-def compute_target_weights(context, data):
-    # Weights are a number that we use to rank each stock. Stocks with high weights are ones
-    # that we want to action on and low weights are ones to ignore
-
-    # Initialize empty target weights dictionary.
-    # This will map securities to their target weight.
-    weights = {}
+    log.info(hist2.head())
+    hist2_sma_75=hist2.mean()
+    log.info(hist2.head())
+    hist2_sma_30=hist2[-30].mean()
     
-    if context.longs and context.shorts: # If there are securities in our longs and shorts lists
-        # 0.5 in each means that we want half of our portfolio to be longs and the other half
-        # to be shorts
-        context.longs = context.longs[-75:]
-        context.shorts = context.shorts[-75:]
-        long_weight = 0.5 / len(context.longs) # Divde 0.5 by the number of longs so each long is equally weighted (it's the same percentage of the porfolio)
-        short_weight = -0.5 / len(context.shorts) # Same for the shorts
-    else:
-        return weights # Return the empty weights if there were no shorts or longs
+    log.info(hist3.head())
+    hist3_sma_75=hist3.mean()
+    log.info(hist3.head())
+    hist3_sma_30=hist3[-30].mean()
+    '''
+    #Just deal with tech
     
-    # Look through the securities in our portfolio and if they are not to be shorted or longed give them a weight of 0 so that no action is taken on them.
-    for security in context.portfolio.positions:
-        if security not in context.longs and security not in context.shorts and data.can_trade(security): # If it's no in longs or shorts and it's tradable
-            weights[security] = 0 # Give it a weight of zero so that we do nothing with it
-
-    for security in context.longs: # For each long
-        weights[security] = long_weight # Give it the weight calculated above.
-
-    for security in context.shorts: # For each short
-        weights[security] = short_weight # Give it the weight calculated above
+    tech_day = hist1[-1] # Today's price
+    tech_3_day = hist1[-3:].mean() # The mean of the last 3 days
+    tech_5_day = hist1[-5:].mean() # The mean of the last 5 days
     
-    return weights # Return the weights
-
-
-def rebalance(context, data):
-    # Calculate target weights to rebalance
-    target_weights = compute_target_weights(context, data)
-    #print (target_weights)
-    # Ensure long and short books
-    # are roughly the same size
-    dollar_neutral = opt.DollarNeutral()
-
-    # Constrain target portfolio's leverage i.e. don't spend more than we have
-    max_leverage = opt.MaxGrossExposure(context.max_leverage)
-
-    # If we have target weights, rebalance our portfolio
-    if target_weights:
-        order_optimal_portfolio(
-            objective=opt.TargetWeights(target_weights),
-            constraints=[dollar_neutral, max_leverage],
-        )
+    percentage_change = abs((float(tech_day - tech_3_day) / tech_3_day)) # Calculate the change
+    # If today's price is better than the 3 day average, and the 3 day average is better than the 5 day average, 
+    # and we've not bought yet and the percentage change is greater than 0.5%
+    if tech_day > tech_3_day and tech_3_day > tech_5_day and not context.bought and percentage_change > 0.005:
+        print "Full buy"
+        order_target_percent(context.stocks, 1) # Buy 100% tech
+        context.bought = True # Set bought to true to log that we've bought
+        context.bought_price = tech_day # Store the price that we bought at
+    
+    # If today's price is less than the 3 day average, and the 3 day average is worse than the 5 day average,
+    # and we've got stuff to sell, and today's price is greater than the price that we bought it for
+    # and the percentage change is greater than 0.5%
+    elif tech_day < tech_3_day and tech_3_day < tech_5_day and context.bought and tech_day > context.bought_price and percentage_change > 0.005:
+        print "Full sell"
+        order_target_percent(context.stocks, -1) # Fully short in tech
+        context.bought = False # Set bought to False to log that we've sold
+        context.sold_price = tech_day # Store the price that we sold at
+    '''
+    if hist1_sma_30>hist1_sma_75:
+        if hist2_sma_30>hist2_sma_75:
+            if hist3_sma_30>hist3_sma_75:
+                
+                order_target_percent(context.stocks, 0.33) #sid and amount. 1.0 is 100%, 0.33 is 30 percent. splitting each equally into 3 baskets t0 maximise returns from each
+                order_target_percent(context.stocks2, 0.33)
+                order_target_percent(context.stocks3, 0.33)
+        else:
+            order_target_percent(context.stocks, 0.25)
+            order_target_percent(context.stocks2, 0.25)
+            order_target_percent(context.stocks3, 0.25)   
+                
+    elif hist1_sma_75>hist1_sma_30:
+        order_target_percent(context.stocks,-0.75) #shorting the company as share price decreases
+        order_target_percent(context.stocks2, -1.0)
+    '''
