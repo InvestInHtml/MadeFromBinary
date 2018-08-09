@@ -26,7 +26,6 @@ def handle_data(context, data): #function takes data; universe of information. c
     hist1_sma_75=hist1.mean() #sma is simple moving average, hist takes it from the above defined data set
     log.info(hist1.head())
     hist1_sma_30=hist1[-30:].mean() #mean of the last 20 days of the history
-
     log.info(hist2.head())
     hist2_sma_75=hist2.mean()
     log.info(hist2.head())
@@ -39,13 +38,13 @@ def handle_data(context, data): #function takes data; universe of information. c
     '''
     #Just deal with tech
     tech_day = hist1[-1] # Today's price
-    tech_3_day = hist1[-3:].mean() # The mean of the last 3 days
-    tech_5_day = hist1[-5:].mean() # The mean of the last 5 days
+    tech_2_day = hist1[-2:].mean() # The mean of the last 3 days
+    tech_4_day = hist1[-4:].mean() # The mean of the last 5 days
     
-    percentage_change = abs((float(tech_day - tech_3_day) / tech_3_day)) # Calculate the change
+    percentage_change = abs((float(tech_day - tech_2_day) / tech_2_day)) # Calculate the change
     # If today's price is better than the 3 day average, and the 3 day average is better than the 5 day average, 
     # and we've not bought yet and the percentage change is greater than 0.5%
-    if tech_day > tech_3_day and tech_3_day > tech_5_day and not context.bought_tech and percentage_change > 0.005:
+    if tech_day > tech_2_day and tech_2_day > tech_4_day and not context.bought_tech and percentage_change > 0.005:
         print "Full buy"
         order_target_percent(context.stocks, 1) # Buy 100% tech
         context.bought_tech = True # Set bought to true to log that we've bought
@@ -54,7 +53,7 @@ def handle_data(context, data): #function takes data; universe of information. c
     # If today's price is less than the 3 day average, and the 3 day average is worse than the 5 day average,
     # and we've got stuff to sell, and today's price is greater than the price that we bought it for
     # and the percentage change is greater than 0.5%
-    elif tech_day < tech_3_day and tech_3_day < tech_5_day and context.bought_tech and tech_day > context.bought_price_tech and percentage_change > 0.005:
+    elif tech_day < tech_2_day and tech_2_day < tech_4_day and context.bought_tech and tech_day > context.bought_price_tech and percentage_change > 0.005:
         print "Full sell"
         order_target_percent(context.stocks, -1) # Fully short in tech
         context.bought_tech = False # Set bought to False to log that we've sold
