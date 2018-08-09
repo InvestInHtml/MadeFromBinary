@@ -85,13 +85,13 @@ def handle_data(context, data): #function takes data; universe of information. c
     
     #Just deal with health
     health_day = hist3[-1] # Today's price
-    health_3_day = hist3[-3:].mean() # The mean of the last 3 days
-    health_5_day = hist3[-5:].mean() # The mean of the last 5 days
+    health_2_day = hist3[-2:].mean() # The mean of the last 3 days
+    health_4_day = hist3[-4:].mean() # The mean of the last 5 days
     
-    percentage_change = abs((float(health_day - health_3_day) / health_3_day)) # Calculate the change
+    percentage_change = abs((float(health_day - health_2_day) / health_2_day)) # Calculate the change
     # If today's price is better than the 3 day average, and the 3 day average is better than the 5 day average, 
     # and we've not bought yet and the percentage change is greater than 0.5%
-    if health_day > health_3_day and health_3_day > health_5_day and not context.bought_health and percentage_change > 0.005:
+    if health_day > health_2_day and health_2_day > health_4_day and not context.bought_health and percentage_change > 0.005:
         print "Full buy"
         order_target_percent(context.stocks3, 1) # Buy 100% health
         context.bought_health = True # Set bought to true to log that we've bought
@@ -100,7 +100,7 @@ def handle_data(context, data): #function takes data; universe of information. c
     # If today's price is less than the 3 day average, and the 3 day average is worse than the 5 day average,
     # and we've got stuff to sell, and today's price is greater than the price that we bought it for
     # and the percentage change is greater than 0.5%
-    elif health_day < health_3_day and health_3_day < health_5_day and context.bought_health and health_day > context.bought_price_health and percentage_change > 0.005:
+    elif health_day < health_2_day and health_2_day < health_4_day and context.bought_health and health_day > context.bought_price_health and percentage_change > 0.005:
         print "Full sell"
         order_target_percent(context.stocks3, -1) # Fully short in health
         context.bought_health = False # Set bought to False to log that we've sold
