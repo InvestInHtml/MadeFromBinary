@@ -17,7 +17,17 @@ def initialize(context): #alleviates need to call functions
     context.bought_price_health = 0.0 # We've not bought anything yet
     context.sold_price_health = 999999.9
     
+    context.minute_counter = 0 # To track how many minutes have run
+    
 def handle_data(context, data): #function takes data; universe of information. contains everything, eg stock prices
+    
+    # This function runs every minute but for speed we only want it to run every 5 minutes
+    context.minute_counter += 1 # Increment the minute counter
+    
+    if (context.minute_counter < 5): # If its not been 5 minutes yet
+        return # Wait another minute
+    else: # Its been 5 minutes
+        context.minute_counter = 0 # Reset the counter 
     hist1=data.history(context.stocks, 'price', 75, '1d') #50 periods of 1 day data history prices for Apple
     hist2=data.history(context.stocks2, 'price', 30, '1d')
     hist3=data.history(context.stocks3, 'price', 50, '1d')
